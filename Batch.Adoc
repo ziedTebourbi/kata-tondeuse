@@ -1,0 +1,763 @@
+:doctype: book
+:toc: left
+:toclevels: 5
+:sectnums:
+:sectnumlevels: 5
+
+= Software Factory - FatJar Batch
+
+== Introduction ==
+
+This documention explain how to use spring-batch only to write your own batch
+
+Please, see the documentation of fatjar [[Software_Factory_-_FatJar]] for more details
+
+And here, the offical documentation of spring-batch https://docs.spring.io/spring-batch/docs/current/reference/html/index.html
+
+=== Spring Batch Introduction ===
+
+* A typical batch program generally reads a large number of records from a database, file, webservice or queue, processes the data in some fashion, and then writes back data in a modified form.
+* In order to process such operations in Java, we have decided to use Spring Batch Framework.
+* Spring Batch is a lightweight, comprehensive batch framework designed to enable the development of robust java batch applications.
+* Spring Batch is not a scheduling framework. It is intended to work in conjunction with a scheduler (Control-M), not replace a scheduler.
+* Spring Batch provides reusable functions that are essential in processing large volumes of records, including logging/tracing, transaction management, job processing statistics, job restart, skip, and resource management.
+
+=== Batch Concepts ===
+
+* The diagram below is simplified version of the batch reference architecture that has been used for decades.
+* There are "Jobs" and "Steps" and developer supplied processing units called ItemReaders and ItemWriters.
+
+==== Jobs ====
+
+* A Job has one to many steps
+* A job needs to be launched (JobLauncher), and meta data about the currently running process needs to be stored (JobRepository).
+
+image::images/Refmodel-min.png[]
+
+==== Steps ====
+
+===== Chunk-Oriented processing =====
+
+Spring Batch uses a 'Chunk Oriented' processing style within its most common implementation. 
+
+One item is read in from an ItemReader, handed to an ItemProcessor, and aggregated. 
+
+Once the number of items read equals the commit interval, the entire chunk is written out via the ItemWriter, and then the transaction is committed.
+
+image::images/Chunk-min.png[]
+
+====== ItemReader ======
+
+An ItemReader is the means for providing data from many different types of input. The most general examples include :
+
+* Flat File - Flat File Item Readers read lines of data from a flat file that typically describe records with fields of data defined by fixed positions in the file or delimited by some special character (e.g. Comma).
+* XML - XML ItemReaders process XML independently of technologies used for parsing, mapping and validating objects. Input data allows for the validation of an XML file against an XSD schema.
+* Database - A database resource is accessed to return resultsets which can be mapped to objects for processing.
+* Business Services - A Business Service is accessed to return items
+
+====== ItemProcessor ======
+
+An ItemProcessor is very simple; given one object, transform it and return another. The provided object may or may not be of the same type. 
+
+The point is that business logic may be applied within process, and is completely up to the developer to create.
+
+====== ItemWriter ======
+
+ItemWriter is similar in functionality to an ItemReader, but with inverse operations. 
+
+Resources still need to be located, opened and closed but they differ in that an ItemWriter writes out, rather than reading in.
+
+===== Tasklet processing =====
+
+Chunk-oriented processing is not the only way to process in a Step. If we don't need to chunk the data, wa can use a '''TaskletStep'''.
+
+== Implement Fatjar Batch ==
+
+=== Spring Batch execution datasource ===
+
+Spring Batch need to create tables to store context and executions
+
+Fow now, the goal is to store this tables in h2 "InMemory" database
+
+That why you can found h2 dependency in pom.xml and batch datasource in applicatio.yml
+
+[source,xml]
+----
+<dependency>
+  <groupId>com.h2database</groupId>
+  <artifactId>h2</artifactId>
+</dependency>
+----
+
+[source,yml]
+----
+datasources:
+  batch:
+    platform: h2
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+    jdbc-url: jdbc:h2:mem:jdbc:h2:mem:batch;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+----
+
+If your batch requires a database for the implementation
+
+[source,yml]
+----
+datasources:
+  input:
+    driver-class-name: xxx
+    username: xxx
+    password: xxx
+    jdbc-url: xxx
+----
+
+[source,java]
+----
+@Bean("inputDataSource")
+@ConfigurationProperties(prefix = "datasources.input")
+public DataSource inputDataSource() {
+    return DataSourceBuilder.create().build();
+}
+----
+
+[source,java]
+----
+@Autowired
+@Qualifier("inputDataSource")
+private DataSource inputDataSource;
+----
+
+=== Configure a tasklet processing batch ===
+
+The default archetype come with a default configuration with Tasklet processing
+
+[source,java]
+----
+@Configuration
+public class MonBatchConfiguration {
+
+    @Bean
+    public Job job(JobRepository jobRepository, PlatformTransactionManager platformTransactionManager) {
+        return new JobBuilder("monbatch", jobRepository)
+                .start(new StepBuilder("firstStep", jobRepository)
+                        .tasklet(firstTask(), platformTransactionManager)
+                        .build())
+                .build();
+    }
+
+    @Bean
+    public FirstTask firstTask() {
+        return new FirstTask();
+    }
+
+}
+----
+
+For starters, the @EnableBatchProcessing annotation adds many critical beans that support jobs and saves you a lot of leg work.
+
+Now, you can directly implement the FirstTask class to process your batch
+
+[source,java]
+----
+@Slf4j
+public class FirstTask implements Tasklet {
+
+    @Value("${parameters.name}")
+    private String name;
+
+    /**
+     * execute
+     * @return RepeatStatus
+     */
+    @Override
+    public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) {
+        log.info("Hello {} !", name);
+        return RepeatStatus.FINISHED;
+    }
+
+}
+----
+
+=== Configure a chunk-oriented processing batch ===
+
+==== Simple configuration ====
+
+To configure a chunk-oriented processing batch, you need to create an ItemReader, ItemProcessor, and ItemWriter
+
+[source,java]
+----
+@Configuration
+public class MonBatchConfiguration {
+
+    @Value("${batch.chunk.size}")
+    private int chunkSize;
+
+    @Bean
+    public Job myJob(JobRepository jobRepository, PlatformTransactionManager platformTransactionManager) {
+        return new JobBuilder("monbatch", jobRepository)
+                .start(new StepBuilder("firstStep", jobRepository)
+                        .<ModelInput, ModelOutput> chunk(chunkSize, platformTransactionManager)
+                        .reader(reader())
+                        .processor(processor())
+                        .writer(writer())
+                        .build())
+                .build();
+    }
+
+    @Bean
+    public ItemReader<ModelInput> reader() {
+        return new MyReader();
+    }
+
+    @Bean
+    public ItemProcessor<ModelInput, ModelOutput> processor() {
+        return new MyProcessor();
+    }
+
+    @Bean
+    public ItemWriter<ModelOutput> writer() {
+        return new MyWriter();
+    }
+
+}
+----
+
+Some Readers and Writers already exists to manipulate DATABASE, JSON, YAML, XML, CSV formats
+
+Check the spring-batch documentation to avoid unnecessary developments: https://docs.spring.io/spring-batch/docs/current/reference/html/appendix.html#listOfReadersAndWriters
+
+==== Scaling and Parallel Processing ====
+
+See official documentation : https://docs.spring.io/spring-batch/docs/current/reference/html/scalability.html#scalability
+
+==== Repeat ====
+
+See official documentation : https://docs.spring.io/spring-batch/docs/current/reference/html/repeat.html#repeat
+
+==== Retry ====
+
+See official documentation : https://docs.spring.io/spring-batch/docs/current/reference/html/retry.html#retry
+
+=== Configure a mixed processing batch ===
+
+Of course, it's possible to mix tasklet processing and chunk-oriented processing by creating multiple steps
+
+Example:
+
+* Download a file
+* Read and process the file and write a result file
+* Upload the result file
+
+[source,java]
+----
+@Bean
+public Job job(JobRepository jobRepository, PlatformTransactionManager platformTransactionManager) {
+    return new JobBuilder("monbatch", jobRepository)
+            .start(new StepBuilder("downloadInputFileStep", jobRepository)
+                    .tasklet(downloadInputFileTasklet(), platformTransactionManager)
+                    .build())
+            .next(new StepBuilder("processingStep", jobRepository)
+                    .<ModelInput, ModelOutput> chunk(chunkSize, platformTransactionManager)
+                    .reader(reader())
+                    .processor(processor())
+                    .writer(writer())
+                    .build())
+            .next(new StepBuilder("uploadFileStep", jobRepository)
+                    .tasklet(uploadFileTasklet(), platformTransactionManager)
+                    .build())
+            .build();
+}
+----
+
+=== Exit status ===
+
+* The only way to communicate back to the scheduler about the success or failure of a job is through return codes. 
+* A return code is a number that is returned to a scheduler by the process that indicates the result of the run.
+* The default dimplementation used by the job runner is the SimpleJvmExitCodeMapper that returns
+** 0 for completion
+** 1 for generic errors
+** 2 for any job runner errors
+* If anything more complex than the 3 values above is needed, you can throw an ExitCodeException :
+
+Example:
+
+[source,java]
+----
+@Slf4j
+public class FirstTask implements Tasklet {
+    @Override
+    public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) {
+        final String status = ...
+        return switch (status) {
+            case "CRITICAL" -> throw new ExitCodeException(500, "Critical Error");   // Will exit with the code 500
+            case "NOT_FOUND" -> throw new ExitCodeException(404, "Not found Error"); // Will exit with the code 404
+            case "ERROR" -> throw new ExitCodeException("Error");                    // Will exit with the code 1 (default exit code for this Exception)
+            default -> RepeatStatus.FINISHED;                                        // Will exit with the code 0 (OK)
+        };
+    }
+}
+----
+
+* Never return 0 to Control-M if the job has failed !!!
+
+=== Listeners ===
+
+See official documentation : https://docs.spring.io/spring-batch/docs/current/reference/html/step.html#interceptingStepExecution
+
+=== Test the batch ===
+By default, the batch doesn't automatically run anymore when executing the test phase. It is disabled thanks to the property `spring.batch.job.enabled: false ` in the file application-test.yml. This means that in the context of testing, the batch runs have to be manually triggered.
+
+Here is a simple example of implementation for batch run. As you can see, it allows us to pass different parameters for different test cases
+[source,java]
+----
+class BatchLeasingClientReconcileTest extends AbstractTest {
+
+    @Autowired
+    private JobLauncherTestUtils jobLauncherTestUtils;
+
+    @Test
+    @MockHttp(readOnly = true)
+    void testBatch() throws Exception {
+        JobParameters params = new JobParametersBuilder().addString("myParam", "my value").toJobParameters();
+
+        final JobExecution jobExecution = jobLauncherTestUtils.launchJob(params);
+
+        Assertions.assertEquals(ExitStatus.COMPLETED, jobExecution.getExitStatus());
+    }
+
+}
+----
+For more information, see official documentation : https://docs.spring.io/spring-batch/docs/current/reference/html/testing.html#testing
+
+== Best Practices ==
+
+* Never return exit code 0 if the job has failed !
+* For performance reasons, it is preferable to call the databases directly rather than calling a service for the large volumes.
+* The configuration file 'application.yml' is not packaged in the JAR
+* Configuration between environments will be managed like others fatjars
+* You have to handle errors in you job, item by item, logging them or writing them in a error file
+* You can use Listeners to do that
+
+== How to ==
+
+=== Transmit parameters to the Batch ===
+
+In some cases, the batch need to be launched with parameters
+
+You can do this in 2 ways
+
+==== Use job parameters ====
+
+Spring Batch provide a mecanism to manage job parameters
+
+You need to declare your tasklet as @StepSope
+
+[source,java]
+----
+@Bean
+@StepScope
+public FirstTask firstTask() {
+    return new FirstTask();
+}
+----
+
+Then inject the parameter to use it
+
+[source,java]
+----
+@Slf4j
+public class FirstTask implements Tasklet {
+
+    @Value("#{jobParameters['name'] ?: 'test'}")
+    private String name;
+
+    @Override
+    public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) {
+        log.info("Name: {} !", name);
+        return RepeatStatus.FINISHED;
+    }
+
+}
+----
+
+You can also inject all parameters
+
+[source,java]
+----
+@Slf4j
+public class FirstTask implements Tasklet {
+
+    @Autowired
+    private Map<String, Object> jobParameters;
+
+    @Override
+    public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) {
+        log.info("Name: {} !", jobParameters.get("name"));
+        return RepeatStatus.FINISHED;
+    }
+
+}
+----
+
+Finally run your batch like this
+
+[source,java]
+----
+> java -jar hello.jar name=ZIED
+----
+
+==== Use system properties ====
+
+Simply inject a property with @Value
+
+[source,java]
+----
+@Slf4j
+public class FirstTask implements Tasklet {
+
+    @Value("name:test}")
+    private String name;
+
+    @Override
+    public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) {
+        log.info("Name: {} !", name);
+        return RepeatStatus.FINISHED;
+    }
+
+}
+----
+
+Finally run your batch like this
+
+[source,java]
+----
+> java -Dname=ZIED -jar hello.jar
+----
+
+
+
+
+
+
+
+
+
+
+Add taskLet into the Job before others tasks that need to call a BS
+
+[source,java]
+----
+@Bean
+public Job myJob(JobRepository jobRepository, PlatformTransactionManager platformTransactionManager) {
+    return new JobBuilder("monbatch", jobRepository)
+            .start(new StepBuilder("authenticationStep", jobRepository)
+                    .tasklet(authenticationTask(), platformTransactionManager)
+                    .build())
+            .next(new StepBuilder("firstStep", jobRepository)
+                    .tasklet(firstTask(), platformTransactionManager)
+                    .build())
+            .build();
+}
+----
+
+
+
+
+==== Tests ====
+
+For tests, you have to force transactionId in the ServiceContext
+
+Put this code in the TestConfiguration class
+
+[source,java]
+----
+@Bean
+public ServiceContextCustomizer testServiceContextCustomizer() {
+    return t -> {
+        t.setTransactionId("test_transaction_id");
+        return t;
+    };
+}
+----
+
+
+
+
+=== Read/Write data from/to Business Service ===
+
+==== Reader ====
+
+[source,java]
+----
+@Component
+public class BSPersonItemReader implements ItemReader<Person>, InitializingBean {
+
+    // See fatjar documentation to know how to create a client
+    @Autowired
+    private BSPersonClient bsPersonClient;
+
+    List<Person> list = null;
+
+    @Override
+    public void afterPropertiesSet() throws Exception {
+        list = bsPersonClient.loadPersons();
+    }
+
+    @Override
+    public Person read() throws Exception, UnexpectedInputException, ParseException, NonTransientResourceException {
+        if (list != null && !list.isEmpty()) {
+            return list.remove(0);
+        }
+        return null;
+    }
+
+}
+----
+
+==== Writer ====
+
+[source,java]
+----
+@Component
+public class BSPersonItemWriter implements ItemWriter<Person> {
+
+    // See fatjar documentation to know how to create a client
+    @Autowired
+    private BSPersonClient bsPersonClient;
+
+    @Override
+    public void write(Chunk<? extends Person> chunk) throws Exception {
+        // Bulk update if method exists
+        bsPersonClient.updateBulk(List.copyOf(chunk.getItems()));
+
+        // Or update one by one
+        chunk.forEach(bsPersonClient::update);
+    }
+
+}
+----
+
+=== Read/Write data from/to CSV File ===
+
+==== Reader ====
+
+[source,java]
+----
+@Value("${csv.input}")
+private Resource inputCsvResource;
+
+@Bean
+public ItemReader<Person> csvReader() {
+    return new FlatFileItemReaderBuilder<Person>()
+            .name("csvReader")
+            .resource(inputCsvResource)
+            .targetType(Person.class)
+            .delimited()
+            .delimiter(";")
+            .names("firstName", "lastName")
+            .build();
+}
+----
+
+==== Writer ====
+
+[source,java]
+----
+@Value("${csv.output}")
+private Resource outCsvputResource;
+
+@Bean
+public ItemWriter<Person> csvWriter() {
+    return new FlatFileItemWriterBuilder<Person>()
+            .name("csvWriter")
+            .resource(outCsvputResource)
+            .shouldDeleteIfEmpty(true)
+            .shouldDeleteIfExists(true)
+            .delimited()
+            .delimiter(";")
+            .names("firstName", "lastName")
+            .build();
+}
+----
+
+=== Read/Write data from/to XML File ===
+
+[source,xml]
+----
+<dependency>
+   <groupId>org.springframework</groupId>
+   <artifactId>spring-oxm</artifactId>
+   <version>${spring.version}</version>
+</dependency>
+</pre>
+----
+
+==== Reader ====
+
+[source,java]
+----
+@Value("${xml.input}")
+private Resource inputXmlResource;
+
+@Bean
+public ItemReader<Person> xmlReader() {
+    final Jaxb2Marshaller marshaller = new Jaxb2Marshaller();
+    marshaller.setClassesToBeBound(Person.class);
+
+    return new StaxEventItemReaderBuilder<Person>()
+            .name("xmlReader")
+            .resource(inputXmlResource)
+            .addFragmentRootElements("person")
+            .unmarshaller(marshaller)
+            .build();
+}
+----
+
+==== Writer ====
+
+[source,java]
+----
+@Value("${xml.output}")
+private Resource outXmlputResource;
+
+@Bean
+public ItemWriter<Person> xmlWriter() {
+    final Jaxb2Marshaller marshaller = new Jaxb2Marshaller();
+    marshaller.setClassesToBeBound(Person.class);
+
+    return new StaxEventItemWriterBuilder<Person>()
+            .name("xmlWriter")
+            .resource(outXmlputResource)
+            .rootTagName("persons")
+            .marshaller(marshaller)
+            .build();
+}
+----
+
+=== Read/Write data from/to JSON File ===
+
+==== Reader ====
+
+[source,java]
+----
+@Value("${json.input}")
+private Resource inputJsonResource;
+
+@Bean
+public ItemReader<Person> jsonReader() {
+    final JacksonJsonObjectReader<Person> objectReader = new JacksonJsonObjectReader<>(Person.class);
+    objectReader.setMapper(JSON.mapper());
+
+    return new JsonItemReaderBuilder<Person>()
+            .name("jsonReader")
+            .resource(inputJsonResource)
+            .jsonObjectReader(objectReader)
+            .build();
+}
+----
+
+==== Writer ====
+
+[source,java]
+----
+@Value("${json.output}")
+private Resource ouputJsonResource;
+
+@Bean
+public ItemWriter<Person> jsonWriter() {
+    final JacksonJsonObjectMarshaller<Person> objectWriter = new JacksonJsonObjectMarshaller<>();
+    objectWriter.setObjectMapper(JSON.mapper());
+
+    return new JsonFileItemWriterBuilder<Person>()
+            .name("jsonWriter")
+            .resource(ouputJsonResource)
+            .shouldDeleteIfEmpty(true)
+            .shouldDeleteIfExists(true)
+            .jsonObjectMarshaller(objectWriter)
+            .build();
+}
+----
+
+=== Read/Write data from/to Database ===
+
+==== Reader ====
+
+[source,yml]
+----
+datasources:
+  input:
+    platform: h2
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+    jdbc-url: jdbc:h2:mem:jdbc:h2:mem:input;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+sql:
+  requests:
+    input: |-
+      SELECT firstName, lastName
+      FROM PERSON;
+----
+
+[source,java]
+----
+@Value("${sql.requests.input}")
+private String inputSqlRequest;
+
+@Bean
+@ConfigurationProperties(prefix = "datasources.input")
+public DataSource inputDB() {
+    return DataSourceBuilder.create().build();
+}
+
+@Bean
+public ItemReader<Person> jdbcReader() {
+    return new JdbcCursorItemReaderBuilder<Person>()
+            .name("jdbcReader")
+            .dataSource(inputDB())
+            .rowMapper(new BeanPropertyRowMapper<>(Person.class))
+            .sql(inputSqlRequest)
+            .build();
+}
+----
+
+==== Writer ====
+
+[source,yml]
+----
+datasources:
+  output:
+    platform: h2
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+    jdbc-url: jdbc:h2:mem:jdbc:h2:mem:input;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+sql:
+  requests:
+    output: |-
+      INSERT INTO PERSON (firstName, lastName)
+      VALUES (:firstName, :lastName);
+----
+
+[source,java]
+----
+@Value("${sql.requests.output}")
+private String outputSqlRequest;
+
+@Bean
+@ConfigurationProperties(prefix = "datasources.output")
+public DataSource outputDB() {
+    return DataSourceBuilder.create().build();
+}
+
+@Bean
+public ItemWriter<Person> jdbcWriter() {
+    return new JdbcBatchItemWriterBuilder<Person>()
+            .dataSource(outputDB())
+            .sql(outputSqlRequest)
+            .itemSqlParameterSourceProvider(new BeanPropertyItemSqlParameterSourceProvider<>())
+            .build();
+}
+----
+
+This ItemWriter for JDBC will execute the SQL request for each item, maybe you have to write a specific ItemWriter for large volumes
