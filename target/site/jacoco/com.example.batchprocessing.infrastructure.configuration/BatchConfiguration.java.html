@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="fr"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>BatchConfiguration.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">batch-processing-complete</a> &gt; <a href="index.source.html" class="el_package">com.example.batchprocessing.infrastructure.configuration</a> &gt; <span class="el_source">BatchConfiguration.java</span></div><h1>BatchConfiguration.java</h1><pre class="source lang-java linenums">package com.example.batchprocessing.infrastructure.configuration;
+
+import javax.sql.DataSource;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.batch.core.ExitStatus;
+import org.springframework.batch.core.Job;
+import org.springframework.batch.core.Step;
+import org.springframework.batch.core.StepExecution;
+import org.springframework.batch.core.StepExecutionListener;
+import org.springframework.batch.core.job.builder.JobBuilder;
+import org.springframework.batch.core.repository.JobRepository;
+import org.springframework.batch.core.step.builder.StepBuilder;
+import org.springframework.batch.item.ItemProcessor;
+import org.springframework.batch.item.ItemReader;
+import org.springframework.batch.item.ItemWriter;
+import org.springframework.batch.item.database.JdbcBatchItemWriter;
+import org.springframework.batch.item.database.builder.JdbcBatchItemWriterBuilder;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+
+import com.example.batchprocessing.Application.LawnMowerProcessor;
+import com.example.batchprocessing.Application.LawnMowerReader;
+import com.example.batchprocessing.Application.LawnMowerWriter;
+import com.example.batchprocessing.Application.RenameFileTasklet;
+import com.example.batchprocessing.domain.model.LawnMower;
+import com.example.batchprocessing.domain.model.Position;
+import com.example.batchprocessing.infrastructure.adapter.output.FileLawnMowerRepository;
+import com.example.batchprocessing.infrastructure.listner.JobCompletionNotificationListener;
+import com.example.batchprocessing.port.LawnMowerRepository;
+import com.example.batchprocessing.service.CommandProcessor;
+
+
+@Configuration
+public class BatchConfiguration {
+<span class="fc" id="L38">	private static final Logger logger = LoggerFactory.getLogger(BatchConfiguration.class);</span>
+    private final JobRepository jobRepository;
+    private final DataSourceTransactionManager transactionManager;
+
+<span class="fc" id="L42">    public BatchConfiguration(JobRepository jobRepository, DataSourceTransactionManager transactionManager) {</span>
+<span class="fc" id="L43">        this.jobRepository = jobRepository;</span>
+<span class="fc" id="L44">        this.transactionManager = transactionManager;</span>
+<span class="fc" id="L45">    }</span>
+
+    @Bean
+    public ItemReader&lt;LawnMower&gt; lawnMowerReader(LawnMowerRepository lawnMowerRepository) {
+<span class="fc" id="L49">        return new LawnMowerReader(lawnMowerRepository);</span>
+    }
+
+    @Bean
+    public ItemProcessor&lt;LawnMower, Position&gt; lawnMowerProcessor(CommandProcessor commandProcessor) {
+<span class="fc" id="L54">        return new LawnMowerProcessor(commandProcessor);</span>
+    }
+
+    @Bean
+    public ItemWriter&lt;Position&gt; lawnMowerWriter() {
+<span class="fc" id="L59">        return new LawnMowerWriter();</span>
+    }
+
+    @Bean
+    public Step renameFileStep(RenameFileTasklet renameFileTasklet) {
+<span class="fc" id="L64">        return new StepBuilder(&quot;renameFileStep&quot;, jobRepository)</span>
+<span class="fc" id="L65">                .tasklet(renameFileTasklet, transactionManager)</span>
+<span class="fc" id="L66">                .build();</span>
+    }
+
+    @Bean
+    public Job lawnMowerJob(Step lawnMowerStep, Step renameFileStep, JobCompletionNotificationListener listener) {
+<span class="fc" id="L71">        return new JobBuilder(&quot;lawnMowerJob&quot;, jobRepository)</span>
+<span class="fc" id="L72">            .listener(listener)</span>
+<span class="fc" id="L73">            .start(lawnMowerStep)</span>
+<span class="fc" id="L74">            .next(renameFileStep)</span>
+<span class="fc" id="L75">            .build();</span>
+    }
+
+    @Bean
+    public Step lawnMowerStep(ItemReader&lt;LawnMower&gt; lawnMowerReader,
+                              ItemProcessor&lt;LawnMower, Position&gt; lawnMowerProcessor,
+                              ItemWriter&lt;Position&gt; lawnMowerWriter) {
+<span class="fc" id="L82">        return new StepBuilder(&quot;lawnMowerStep&quot;, jobRepository)</span>
+<span class="fc" id="L83">            .&lt;LawnMower, Position&gt;chunk(1, transactionManager)</span>
+<span class="fc" id="L84">            .reader(lawnMowerReader)</span>
+<span class="fc" id="L85">            .processor(lawnMowerProcessor)</span>
+<span class="fc" id="L86">            .writer(lawnMowerWriter)</span>
+<span class="fc" id="L87">            .listener(new StepExecutionListener() {</span>
+                @Override
+                public void beforeStep(StepExecution stepExecution) {
+<span class="fc" id="L90">                    logger.info(&quot;Starting lawnMowerStep&quot;);</span>
+<span class="fc" id="L91">                }</span>
+
+                @Override
+                public ExitStatus afterStep(StepExecution stepExecution) {
+<span class="fc" id="L95">                    logger.info(&quot;Completed lawnMowerStep with status {}&quot;, stepExecution.getStatus());</span>
+<span class="fc" id="L96">                    return stepExecution.getExitStatus();</span>
+                }
+            })
+<span class="fc" id="L99">            .build();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>

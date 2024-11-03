@@ -1,0 +1,19 @@
+Manifest-Version: 1.0
+Build-Jdk-Spec: 17
+Class-Path: spring-boot-starter-batch-3.3.0.jar spring-boot-starter-3.3.
+ 0.jar spring-boot-3.3.0.jar spring-boot-autoconfigure-3.3.0.jar spring-
+ boot-starter-logging-3.3.0.jar logback-classic-1.5.6.jar logback-core-1
+ .5.6.jar log4j-to-slf4j-2.23.1.jar log4j-api-2.23.1.jar jul-to-slf4j-2.
+ 0.13.jar jakarta.annotation-api-2.1.1.jar snakeyaml-2.2.jar spring-boot
+ -starter-jdbc-3.3.0.jar HikariCP-5.1.0.jar spring-batch-core-5.1.2.jar 
+ spring-batch-infrastructure-5.1.2.jar spring-retry-2.0.6.jar spring-aop
+ -6.1.8.jar spring-beans-6.1.8.jar spring-context-6.1.8.jar spring-expre
+ ssion-6.1.8.jar spring-tx-6.1.8.jar micrometer-core-1.13.0.jar micromet
+ er-commons-1.13.0.jar HdrHistogram-2.2.1.jar LatencyUtils-2.0.3.jar mic
+ rometer-observation-1.13.0.jar hsqldb-2.7.2.jar slf4j-api-2.0.13.jar sp
+ ring-core-6.1.8.jar spring-jcl-6.1.8.jar spring-jdbc-6.1.8.jar
+Implementation-Title: batch-processing-complete
+Implementation-Version: 0.0.1-SNAPSHOT
+Main-Class: com.example.batchprocessing.BatchProcessingApplication
+Created-By: Maven Integration for Eclipse
+

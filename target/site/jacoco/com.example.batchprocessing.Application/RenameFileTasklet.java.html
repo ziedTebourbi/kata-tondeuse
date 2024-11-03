@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="fr"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>RenameFileTasklet.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">batch-processing-complete</a> &gt; <a href="index.source.html" class="el_package">com.example.batchprocessing.Application</a> &gt; <span class="el_source">RenameFileTasklet.java</span></div><h1>RenameFileTasklet.java</h1><pre class="source lang-java linenums">package com.example.batchprocessing.Application;
+
+import org.springframework.batch.core.StepContribution;
+import org.springframework.batch.core.scope.context.ChunkContext;
+import org.springframework.batch.core.step.tasklet.Tasklet;
+import org.springframework.batch.repeat.RepeatStatus;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
+import java.io.File;
+import java.io.IOException;
+import java.net.URISyntaxException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+
+@Component
+<span class="fc" id="L20">public class RenameFileTasklet implements Tasklet {</span>
+
+    @Value(&quot;${mower.input-file}&quot;)
+    private String filePath;  // Chemin du fichier dans les ressources
+
+    @Override
+    public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) throws IOException, URISyntaxException {
+     
+<span class="fc" id="L28">        Path sourcePath = Paths.get(getClass().getClassLoader().getResource(filePath).toURI());</span>
+        
+      
+<span class="fc" id="L31">        Path targetDirectory = Paths.get(&quot;target/renamed_files/&quot;);</span>
+<span class="fc" id="L32">        Files.createDirectories(targetDirectory);  // Créer le répertoire si non existant</span>
+
+     
+<span class="fc" id="L35">        String timestamp = new SimpleDateFormat(&quot;yyyyMMddHHmmss&quot;).format(new Date());</span>
+<span class="fc" id="L36">        String newFileName = &quot;mower_instructions_&quot; + timestamp + &quot;.txt&quot;;</span>
+<span class="fc" id="L37">        Path targetPath = targetDirectory.resolve(newFileName);</span>
+
+    
+<span class="fc" id="L40">        Files.copy(sourcePath, targetPath);</span>
+<span class="fc" id="L41">        System.out.println(&quot;File copied and renamed to: &quot; + targetPath.toAbsolutePath());</span>
+
+<span class="fc" id="L43">        return RepeatStatus.FINISHED;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.7.202105040129</span></div></body></html>
