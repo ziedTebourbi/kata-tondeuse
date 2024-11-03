@@ -113,7 +113,7 @@ mvn test
 
 :imagesdir: .
 
-image::coverage.png[Couverture du code]
+image::coverage.png[width=400, height=400,alt="Couverture du code"]
 
 La couverture de code peut être générée avec JaCoCo :
 
