@@ -306,6 +306,8 @@ public class FirstTask implements Tasklet {
 See official documentation : https://docs.spring.io/spring-batch/docs/current/reference/html/step.html#interceptingStepExecution
 
 === Test the batch ===
+image :: coverage.png
+
 By default, the batch doesn't automatically run anymore when executing the test phase. It is disabled thanks to the property `spring.batch.job.enabled: false ` in the file application-test.yml. This means that in the context of testing, the batch runs have to be manually triggered.
 
 Here is a simple example of implementation for batch run. As you can see, it allows us to pass different parameters for different test cases
