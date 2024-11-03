@@ -87,7 +87,8 @@ Créez un fichier `run_batch.bat` avec les instructions suivantes pour exécuter
 
 ```bat
 @echo off
-java -jar target/batch-processing-complete-0.0.1-SNAPSHOT.jar
+set path="E:\jdks\java-17-openjdk-17.0.1.0.12-1.win.x86_64\bin"
+java -DApp.config.file=application.properties  -jar batch-xxx-1.0.0.jar
 pause
 ```
 
