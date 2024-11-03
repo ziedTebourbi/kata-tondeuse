@@ -7,6 +7,7 @@ import java.util.function.Consumer;
 
 import org.springframework.stereotype.Service;
 
+import com.example.batchprocessing.domain.exception.InvalidDataFormatException;
 import com.example.batchprocessing.domain.model.LawnMower;
 
 
@@ -21,7 +22,7 @@ public class CommandProcessor {
         commands.put('D', LawnMower::turnRight);
     }
 
-    public void processCommand(Character command, LawnMower lawnMower) {
+    public void processCommand(Character command, LawnMower lawnMower) throws InvalidDataFormatException{
         Consumer<LawnMower> action = commands.get(command);
         if (action != null) {
             action.accept(lawnMower);

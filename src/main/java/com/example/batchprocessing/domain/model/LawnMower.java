@@ -1,16 +1,29 @@
 package com.example.batchprocessing.domain.model;
 
+import com.example.batchprocessing.domain.exception.InvalidDataFormatException;
+
 public class LawnMower {
     private Position position;
     private final int maxX;
     private final int maxY;
     private String instructions;
 
-    public LawnMower(Position position, int maxX, int maxY, String instructions) {
+    public LawnMower(Position position, int maxX, int maxY, String instructions)throws InvalidDataFormatException {
         this.position = position;
         this.maxX = maxX;
         this.maxY = maxY;
+        validateInstructions(instructions);
         this.instructions = instructions;
+    }
+    
+    private void validateInstructions(String instructions) throws InvalidDataFormatException {
+
+        if (!instructions.matches("[DGA]+")) {
+
+            throw new InvalidDataFormatException("Instructions contain invalid characters.");
+
+        }
+
     }
 
     public Position getPosition() {
