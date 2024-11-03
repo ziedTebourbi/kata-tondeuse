@@ -24,6 +24,23 @@ public class FileLawnMowerRepository implements LawnMowerRepository {
 	private static final Logger logger = LoggerFactory.getLogger(FileLawnMowerRepository.class);
     private final String fileName;
 
+
+    @Value("{error.message.file.not.found.in.classpath}")
+    String errorMessageNotFoundInClasspath;
+    @Value("{error.message.the.file.is.empty.or.does.not.contain.valid.data}")
+    String errorMessageFileIsEmptyOrDoesNotContainValidData;
+    @Value("{error.message.Invalid.data.format.in.the.input.file}")
+    String errorMessageInvalidDataFormatInTheInputFile;
+    @Value("{error.message.Invalid.lawn.limits.format}")
+    String errorMessageInvalidLawnLimitsFormat;
+    @Value("{error.message.Invalid.mower.position.format}")
+    String errorMessageInvalidMowerPositionFormat;
+    @Value("{error.message.Invalid.orientation.value}")
+    String errorMessageInvalidOrientationValue;
+    @Value("{error.message.Error.reading.file}")
+    String errorMessageErrorReadingFile;
+
+
     public FileLawnMowerRepository(@Value("${mower.input-file}") String fileName) {
         this.fileName = fileName;
     }
@@ -38,7 +55,7 @@ public class FileLawnMowerRepository implements LawnMowerRepository {
              BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))) {
 
             if (inputStream == null) {
-            	  throw new FileNotFoundException("File not found in classpath: " + fileName);
+            	  throw new FileNotFoundException(errorMessageNotFoundInClasspath + fileName);
             }
 
             logger.info("File loaded successfully!");
@@ -46,7 +63,7 @@ public class FileLawnMowerRepository implements LawnMowerRepository {
             // Lire la seule ligne du fichier
             String line = reader.readLine();
             if (line == null || line.isEmpty()) {
-            	 logger.error("The file is empty or does not contain valid data.");
+            	 logger.error(errorMessageFileIsEmptyOrDoesNotContainValidData);
                 return lawnMowers;
             }
 
@@ -54,7 +71,7 @@ public class FileLawnMowerRepository implements LawnMowerRepository {
             String[] parts = line.split(" ");
             if (parts.length < 5) {
             	 logger.error("The data format is incorrect or incomplete.");
-            	  throw new InvalidDataFormatException("Invalid data format in the input file.");
+            	  throw new InvalidDataFormatException(errorMessageInvalidDataFormatInTheInputFile);
             }
 
             // Récupérer les limites de la pelouse (premiers éléments)
@@ -65,7 +82,7 @@ public class FileLawnMowerRepository implements LawnMowerRepository {
 				maxY = Integer.parseInt(parts[1]);
 				logger.info("Lawn limits: {} x  {} y" , maxX , maxY);
 			} catch (NumberFormatException e) {
-				   throw new InvalidDataFormatException("Invalid lawn limits format.");
+				   throw new InvalidDataFormatException(errorMessageInvalidLawnLimitsFormat);
 			}
 
             // Parcourir les tondeuses
@@ -78,13 +95,13 @@ public class FileLawnMowerRepository implements LawnMowerRepository {
 					x = Integer.parseInt(parts[i]);
 					y = Integer.parseInt(parts[i + 1]);
 				} catch (Exception e) {
-					 throw new InvalidDataFormatException("Invalid mower position format.");
+					 throw new InvalidDataFormatException(errorMessageInvalidMowerPositionFormat);
 				}
                 Orientation orientation;
 				try {
 					orientation = Orientation.valueOf(parts[i + 2]);
 				} catch (Exception e) {
-				    throw new OrientationNotFoundException("Invalid orientation value.");
+				    throw new OrientationNotFoundException(errorMessageInvalidOrientationValue);
 				}
                 Position position = new Position(x, y, orientation);
 
@@ -101,7 +118,7 @@ public class FileLawnMowerRepository implements LawnMowerRepository {
             }
 
         } catch (Exception e) {
-        	   throw new RuntimeException("Error reading file: " + e.getMessage(), e);
+        	   throw new RuntimeException(errorMessageErrorReadingFile+ e.getMessage(), e);
         }
 
         logger.info("Total LawnMowers loaded: {} " , lawnMowers.size());

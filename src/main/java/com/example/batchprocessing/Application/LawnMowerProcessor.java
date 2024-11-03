@@ -26,7 +26,7 @@ public class LawnMowerProcessor implements ItemProcessor<LawnMower, Position> {
         // Exécuter les instructions de déplacement
         for (char command : lawnMower.getInstructions().toCharArray()) {
             commandProcessor.processCommand(command, lawnMower);
-            logger.debug("Executed command '{}', new position: {}", command, lawnMower.getPosition());
+            logger.info("Executed command '{}', new position: {}", command, lawnMower.getPosition());
         }
 
         logger.info("LawnMower final position after processing: {}", lawnMower.getPosition());
