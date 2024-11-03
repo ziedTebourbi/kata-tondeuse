@@ -111,6 +111,8 @@ mvn test
 
 == <<coverage,Couverture de Code>>
 
+image :: coverage.png
+
 La couverture de code peut être générée avec JaCoCo :
 
 ```bash
